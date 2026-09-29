@@ -22,7 +22,13 @@ const harness = {
     }
     const target = resolve(location.path)
     const filename = basename(target)
-    if (filename !== 'session.jsonl' && filename !== 'session.jsonl.zstd') {
+    const supportedNames = new Set([
+      'session.jsonl',
+      'session.jsonl.zstd',
+      'session.v4.jsonl',
+      'session.v4.jsonl.zstd',
+    ])
+    if (!supportedNames.has(filename)) {
       throw new Error('拒绝删除非 JSONL 会话文件')
     }
     const info = await lstat(target)
@@ -385,13 +391,34 @@ function normalizeContextRequest(input) {
       }
       const location = persistence?.locate?.(header)
       if (location === undefined || location.kind !== 'jsonl') {
-        throw new SideChatError('delete-unsupported', '当前会话存储后端不支持逐会话彻底删除；已保留该侧聊')
+        await release(sessionId)
+        return {
+          sessionId,
+          mode,
+          deleted: false,
+          warning: '当前会话存储后端不支持逐会话彻底删除；已关闭并保留该侧聊',
+        }
       }
       if (typeof harness.deleteSessionArtifact !== 'function') {
-        throw new SideChatError('delete-unsupported', '当前插件载入方式不提供安全文件删除能力；请使用正式本地插件包')
+        await release(sessionId)
+        return {
+          sessionId,
+          mode,
+          deleted: false,
+          warning: '当前插件载入方式不提供安全文件删除能力；已关闭并保留该侧聊',
+        }
       }
       await release(sessionId)
-      await harness.deleteSessionArtifact(location, sessionId)
+      try {
+        await harness.deleteSessionArtifact(location, sessionId)
+      } catch (error) {
+        return {
+          sessionId,
+          mode,
+          deleted: false,
+          warning: `未能彻底删除侧聊，已关闭并保留数据：${error instanceof Error ? error.message : String(error)}`,
+        }
+      }
       return { sessionId, mode, deleted: true }
     }
 
@@ -409,11 +436,13 @@ function normalizeContextRequest(input) {
       byParent.clear()
       await Promise.allSettled(active.map(handle => handle.dispose()))
     }, 'dsh-side-chat: dispose children')
-  const connection = ctx.get('connection')
-  if (connection?.rpc?.handle === undefined) {
+  // Use Cordis' contextual service accessor so registrations are owned by
+  // this plugin fiber (ctx.get() would expose the provider's own context).
+  const connection = ctx.connection
+  if (connection?.fetch?.register === undefined && connection?.rpc?.handle === undefined) {
     throw new Error('dsh-side-chat-dev: public connection.rpc is unavailable')
   }
-  const disposeRpc = connection.rpc.handle('/side-chat', async (endpoint, payload, signal) => {
+  const invokeSideChat = async (endpoint, payload, signal) => {
     const handler = sideChatHandlers.get(endpoint)
     if (handler === undefined) {
       return { ok: false, error: { code: 'internal', message: `未知侧聊方法: ${endpoint}`, details: {} } }
@@ -424,7 +453,34 @@ function normalizeContextRequest(input) {
       const message = error instanceof Error ? error.message : String(error)
       return { ok: false, error: { code: 'internal', message, details: {} } }
     }
-  }, { authority: 'trusted-host' })
+  }
+  // DSH 0.2 exposes one shared /api interceptor, already owned by Remote.
+  // Exact Fetch routes compose with it and keep Connection's auth/trust fence.
+  // DSH 0.1 falls back to its dedicated logical channel.
+  const rpcMethods = [...sideChatHandlers.keys()]
+  const disposeRpc = connection.fetch?.register === undefined
+    ? connection.rpc.handle('/side-chat', invokeSideChat)
+    : (() => {
+      const disposers = rpcMethods.map(method => connection.fetch.register({
+        path: `/api/${method}`,
+        methods: ['POST'],
+        requestBody: 'buffered',
+        async fetch(request) {
+          let envelope
+          try {
+            envelope = await request.json()
+          } catch {
+            return new Response('body is not JSON', { status: 400 })
+          }
+          if (envelope?.type !== 'client-request' || typeof envelope.rpcId !== 'string' || envelope.method !== method) {
+            return new Response('invalid client-request', { status: 400 })
+          }
+          const result = await invokeSideChat(method, envelope.payload, request.signal)
+          return Response.json({ type: 'server-response', rpcId: envelope.rpcId, result })
+        },
+      }))
+      return async () => { await Promise.all(disposers.map(dispose => dispose())) }
+    })()
   ctx.effect(() => async () => {
     await disposeRpc()
     sideChatHandlers.clear()

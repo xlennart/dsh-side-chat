@@ -41,25 +41,28 @@ sideChat.close(child, keep)
 sideChat.close(child, delete)
   ├─ dispose
   ├─ 只解析并验证 child 的精确持久化路径
-  └─ 删除该 child artifact
+  ├─ 支持 session.jsonl(.zstd) 与 session.v4.jsonl(.zstd)
+  └─ 删除失败时仍结束 UI 生命周期，并以 warning 告知数据已保留
 ```
 
 RPC 失败遵循 DSH 判别联合：`{ ok:false, error:{ code:'internal', message, details:{} } }`。
 
 ## 4. 原生 UI 复用
 
-DSH 的 `conversation` entry 已经拥有完整 `ConversationRoot` 以及所有子 slots。client 在加载时保留该 component，并把 entry face 换成 `ParallelConversation`：
+DSH 0.2 的 `main.conversation` entry 负责主会话骨架，并通过公开的 `conversation.content` Component Factory 渲染会话正文。client 在加载时保留该 component，并把 entry face 换成 `ParallelConversation`：
 
 ```text
 ParallelConversation
   ├─ main binding ── 原生 ConversationRoot
   ├─ separator
-  └─ side BindingContext ── 原生 ConversationRoot
+  └─ side SessionProvider ── conversation.content（embedded）
 ```
 
-side binding 只替换 `sessionId/useSession/useInput/useComposerBlock` 的数据源；`renderSlot`、`renderSlotChain`、全局 sessions/workspaces 和全部 DSH 子组件仍由原 entry 提供。插件没有消息 renderer、Markdown renderer 或输入栏实现。
+侧栏通过 `sessions.retain()` 保留 child reference，再由官方 `SessionProvider` 和 `conversation.content` factory 渲染；factory 使用固定 chat view，但消息、Markdown、工具卡和输入栏仍全部来自 DSH。插件没有自建消息 renderer、Markdown renderer 或输入栏实现。
 
-客户端 loader 会并行执行插件，`dsh.client.inject` 只保证依赖服务可注入，不保证目标插件已经完成 `apply()`。因此 Side Chat 通过 slot registry 的 `conversation` entry 变更订阅等待原生 entry 注册；等待是事件驱动的，并带有可取消的 15 秒诊断截止时间，不使用固定间隔轮询。原生 entry 卸载或热重载时会先恢复旧 component，再等待并接管新 entry；Side Chat 卸载会同步取消订阅和截止时间。header actions/utilities 等子 slot 则使用 `slots.inject` 跟随各自的声明生命周期。
+客户端 loader 会并行执行插件，`dsh.client.inject` 只保证依赖服务可注入，不保证目标插件已经完成 `apply()`。因此 Side Chat 同时订阅 `main.conversation` 与 `conversation.content` factory 的注册生命周期，二者就绪后再接管主 entry；等待是事件驱动的，并带有可取消的 15 秒诊断截止时间，不使用固定间隔轮询。原生 entry 或 factory 卸载、热重载时会先恢复旧 component，再等待并接管新 entry；Side Chat 卸载会同步取消订阅和截止时间。header actions/utilities 等子 slot 则使用 `slots.inject` 跟随各自的声明生命周期。
+
+为兼容 DSH 0.1.7，适配层仍保留旧 `conversation` entry + BindingContext 路径；运行时优先选择 0.2 的 Component Factory，只有 factory 不存在时才回退到旧路径。
 
 新 child 的原生状态是 blank。为了让侧聊输入框和已有主会话底部对齐，side binding 将 blank composer phase 稳定投影为 active，并用 WeakMap 保持快照引用；composer seat 使用 auto margin 吸收无消息时的剩余空间。输入框尺寸、ResizeObserver、sticky、草稿增长与接管面板仍由原生 `ConversationRoot` 控制。
 
@@ -71,6 +74,8 @@ side binding 只替换 `sessionId/useSession/useInput/useComposerBlock` 的数�
 - 恢复重用相同 `sideId`。
 - 打开/恢复用 DSH 原生消息气泡＋图标；隐藏用面板图标；关闭用 DSH 详情面板同风格 X。
 - 关闭才显示删除/保留 modal。
+- split shell 在任意容器宽度都保留主对话；不会用侧聊替换主会话页面。
+- Better Sidebar 融合只改变侧聊的渲染位置，Side Chat 自己的 header 入口始终注册；融合页面不重复渲染悬浮关闭按钮，由 Better Sidebar 标签页本身负责关闭与重新打开。
 
 ## 6. 选区
 
@@ -78,4 +83,4 @@ side binding 只替换 `sessionId/useSession/useInput/useComposerBlock` 的数�
 
 ## 7. 已知 seam
 
-当前 DSH 没有公开“为任意 session 渲染完整 conversation”的稳定 service。插件使用现有 slot registry `_core` 的 `entries/subscribe/register` 生命周期 seam 找到并跟踪唯一原生 conversation entry，并从 `SessionProvider` 获取 BindingContext Provider。目标 entry 尚未注册属于可等待的 loader 状态；只有 seam 本身缺失才会在加载时 fail loud。上游若改变该 seam，应更新适配层；禁止退回手搓聊天 UI。
+DSH 0.2 已公开 `conversation.content` Component Factory，可在任意 `SessionProvider` 下复用完整 conversation content。插件仍使用 slot registry `_core` 的 `entries/subscribe/register` 生命周期 seam 来替换主 `main.conversation` entry；目标 entry 或 factory 尚未注册属于可等待的 loader 状态，只有 seam 本身缺失才会在加载时 fail loud。上游若改变 entry 生命周期，应更新适配层；禁止退回手搓聊天 UI。

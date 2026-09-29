@@ -10,7 +10,7 @@
 - `packages/client/ui-conversation/src/client/chat/ChatView.tsx`
 - `packages/client/ui-conversation/src/client/contract/slots.ts`
 
-实现选择：复用注册到 `conversation` 的完整 `ConversationRoot`，而不是复制 InputBar、MessageItem、Markdown 或工具卡源码。插件只提供双栏容器、任意 child 的会话绑定与增量动作。
+0.2.0-rc.1 新增 `conversation.content` Component Factory，并把主骨架注册到 `main.conversation`。实现选择：主列复用原生 `ConversationRoot`，侧列在官方 `SessionProvider` 下调用该 factory，而不是复制 InputBar、MessageItem、Markdown 或工具卡源码。插件只提供双栏容器、child reference 与增量动作。
 
 ## 会话绑定与列表语义
 
@@ -38,4 +38,4 @@
 
 ## 上游兼容边界
 
-公开 slot contract 没有 arbitrary-session ConversationRoot renderer。当前实现使用 slot registry `_core` 与 `SessionProvider` 的 BindingContext seam。该 seam 变化时应更新适配层并重新做真实 UI 验收，不应重新引入手写 conversation/composer。
+0.2 的公开 `conversation.content` factory 解决了 arbitrary-session conversation content 渲染；当前实现仍使用 slot registry `_core` 接管 `main.conversation` entry 的生命周期。0.1.7 则保留旧 `conversation` entry 与 BindingContext 兼容路径。任一上游 seam 变化时都应更新适配层并重新做真实 UI 验收，不应重新引入手写 conversation/composer。

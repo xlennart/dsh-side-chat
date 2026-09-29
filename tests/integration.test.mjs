@@ -58,6 +58,7 @@ function fixture({ coldParent = false } = {}) {
     },
   }
   services.connection = connection
+  ctx.connection = connection
   apply(ctx)
   const call = async (method, input) => {
     const result = await handlers.get('rpc')(method, input)
@@ -98,5 +99,14 @@ test('keep closes the live child but preserves persistence', async () => {
   const opened = await run.call('sideChat.open', { parentSessionId: 'main-session' })
   const closed = await run.call('sideChat.close', { sessionId: opened.sessionId, mode: 'keep' })
   assert.equal(closed.deleted, false)
+  assert.equal(run.child().disposed, true)
+})
+
+test('delete failure still closes the pane contract and reports retained data', async () => {
+  const run = fixture()
+  const opened = await run.call('sideChat.open', { parentSessionId: 'main-session' })
+  const closed = await run.call('sideChat.close', { sessionId: opened.sessionId, mode: 'delete' })
+  assert.equal(closed.deleted, false)
+  assert.match(closed.warning, /已关闭并保留数据/)
   assert.equal(run.child().disposed, true)
 })
