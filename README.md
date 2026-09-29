@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="release/dsh-side-chat-1.2.0.tgz"><img alt="Version 1.2.0" src="https://img.shields.io/badge/version-1.2.0-2563eb?style=flat-square"></a>
+  <a href="release/dsh-side-chat-1.2.1.tgz"><img alt="Version 1.2.1" src="https://img.shields.io/badge/version-1.2.1-2563eb?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a>
-  <img alt="Tests 24 passing" src="https://img.shields.io/badge/tests-24%20passing-16a34a?style=flat-square">
+  <img alt="Tests 28 passing" src="https://img.shields.io/badge/tests-28%20passing-16a34a?style=flat-square">
   <img alt="DeepSeek Harness plugin" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-0ea5e9?style=flat-square">
 </p>
 
@@ -33,7 +33,7 @@
 
 ## 先看这里
 
-- **想直接使用：** 下载 [`release/dsh-side-chat-1.2.0.tgz`](release/dsh-side-chat-1.2.0.tgz)，按下方命令安装。
+- **想直接使用：** 下载 [`release/dsh-side-chat-1.2.1.tgz`](release/dsh-side-chat-1.2.1.tgz)，按下方命令安装。
 - **想参与开发：** 克隆仓库后运行 `npm test`，它会构建插件并执行全部回归测试。
 - **它解决什么：** 在不离开主会话的情况下，打开一个可以独立提问、调用工具和修改工作区的原生 DSH 会话。
 - **最重要的边界：** 主会话与侧聊共享工作区，但 transcript 相互独立；侧聊不会自动复制整段主对话。
@@ -58,10 +58,10 @@
 
 ```powershell
 # 从 GitHub Release 下载后：
-dsh plugin --profile web add .\dsh-side-chat-1.2.0.tgz
+dsh plugin --profile web add .\dsh-side-chat-1.2.1.tgz
 
 # 或使用仓库内副本：
-dsh plugin --profile web add .\release\dsh-side-chat-1.2.0.tgz
+dsh plugin --profile web add .\release\dsh-side-chat-1.2.1.tgz
 ```
 
 从希望 Agent 操作的工程目录启动 DSH：
@@ -113,9 +113,9 @@ pnpm --dir $DshSource dsh plugin --profile web update dsh-side-chat
 
 - 每个主会话维护自己的侧聊状态，切换主会话不会串用另一条侧聊。
 - “保留对话”会释放当前 Agent，但保留磁盘会话；下次以相同模式打开时会恢复最近保留的侧聊。
-- “删除并关闭”只允许删除插件创建的侧聊，并要求当前存储后端支持安全的逐会话删除；不满足条件时会明确报错并保留会话。
+- “删除并关闭”只允许删除插件创建的侧聊，并支持 DSH 0.2 的 `session.v4.jsonl.zstd`；即使存储后端拒绝删除，也会关闭侧栏、恢复主对话并明确提示数据已保留。
 - 打开设置、插件市场或其他 DSH 原生弹窗时，分隔条会让出指针交互，不会覆盖或拦截弹窗。
-- 与 Better Sidebar 同时安装时，两种右侧并行面板互斥：打开侧聊会收起 Better Sidebar，打开 Better Sidebar 会隐藏侧聊；未安装 Better Sidebar 时仍使用正常的 DSH 原生 header 布局。
+- 与 Better Sidebar 同时安装时可选择把侧聊渲染为它的注册页面，并使用标签页自带的关闭按钮；无论是否启用融合，Side Chat 自己的 header 入口都会保留。未安装或停用融合时，入口直接打开原生并排侧聊。
 - 可在 DSH 设置的“侧边聊天”页面启用或停用插件，并选择新侧聊默认使用的原生 Agent 模式。
 
 ## 会话与数据
@@ -131,13 +131,13 @@ pnpm --dir $DshSource dsh plugin --profile web update dsh-side-chat
 | 能力 | 实现方式 |
 | --- | --- |
 | **真实独立会话** | 通过 DSH `agents.create/resume` 创建或恢复带 `parentSession` 的 Session，不占用 subagent routing。 |
-| **完整原生 UI** | 左右两栏都渲染完整 `ConversationRoot`；消息、工具、审批、附件、输入框、模型和权限控件继续由 DSH 提供。 |
-| **发送前即完整可用** | 空白侧聊也显示原生 header、输入框以及隐藏/关闭控制，发送消息前后使用同一套原生界面。 |
+| **完整原生 UI** | DSH 0.2 通过官方 `conversation.content` Factory 渲染侧聊，0.1 继续复用 `ConversationRoot`；消息、工具、审批、附件、输入框、模型和权限控件均由 DSH 提供。 |
+| **发送前即完整可用** | 空白侧聊也显示原生会话正文、输入框以及隐藏/关闭控制，发送消息前后使用同一套原生界面。 |
 | **按需理解主对话** | 不复制主 transcript；需要背景时，通过 `side_chat_context` 检索有界、相关的父会话片段。 |
-| **真正并排** | 只增加最小 split shell；分隔条支持拖拽和方向键微调，侧聊占比限制在 25%–70%。 |
+| **真正并排** | 只增加最小 split shell；主对话在窄窗口也不会被隐藏，分隔条支持拖拽和方向键微调，侧聊占比限制在 25%–70%。 |
 | **不污染会话列表** | 新侧聊立即归档，不出现在 workspace 左侧列表中。 |
 | **选文即问** | 选中主消息文字后出现“引用到侧聊”；引用可预览、可删除，且不会在原生输入框中残留 `@` 或隐藏文本。 |
-| **兼容 Better Sidebar** | 两种右侧并行面板自动互斥，并对齐 header 控件；没有安装 Better Sidebar 时保持正常显示。 |
+| **兼容 Better Sidebar** | 可选注册为 Better Sidebar 页面，同时始终保留 Side Chat 自己的快捷入口；没有安装 Better Sidebar 时保持完整独立功能。 |
 | **可隐藏、可恢复、可删除** | 隐藏只收起面板；保留后可以恢复，关闭时也可选择安全删除。 |
 | **原生模式与模型** | 新侧聊默认标准模式，可选 PTC、极简或创造模式；模型选择器保持 DSH 原生行为。 |
 
@@ -145,8 +145,8 @@ pnpm --dir $DshSource dsh plugin --profile web update dsh-side-chat
 
 - 当前选文入口主要针对鼠标选择；移动端长按选文和触摸操作条尚未做专门优化。
 - 单次选文引用最多保留 8,000 个字符，超出的部分会被截断。
-- 任意 Session 的完整会话渲染目前依赖 DSH `SessionProvider` 的 BindingContext seam。若上游移除该 seam，插件会显式报错，不会退回自定义聊天界面。
-- 安全彻底删除依赖 JSONL 会话存储和正式本地插件包提供的删除能力；不支持时会保留数据并返回明确错误。
+- DSH 0.2 使用公开的 `SessionProvider` 和 `conversation.content` Factory；兼容 DSH 0.1 时仍保留旧 BindingContext 适配路径。任一路径失效都会显式报错，不会退回自定义聊天界面。
+- 安全彻底删除支持 DSH 0.1/0.2 的 JSONL 与 Zstandard JSONL 会话文件，并依赖正式本地插件包提供的删除能力；不支持时会关闭侧栏、恢复主对话、保留数据并显示警告。
 - 侧聊按需读取的是有界父会话上下文，不保证每次都包含主会话中的全部历史细节。
 
 ## 架构边界
@@ -161,7 +161,7 @@ host 只增加侧聊需要的生命周期与上下文能力：
        └─ side_chat_context → 按需读取父会话的相关上下文
 ```
 
-client 保留 DSH 已注册的原生 conversation component，只把它放进两个会话绑定中。插件没有自己的消息 renderer，也没有自己的 composer 实现。最小 split shell 只负责布局、分隔条和生命周期入口，不接管 DSH 的消息、输入、模型、附件、工具或审批能力。
+client 保留 DSH 已注册的主 conversation component，并在 DSH 0.2 中通过官方 Factory 为侧 Session 创建第二个原生 conversation content；0.1 走兼容适配器。插件没有自己的消息 renderer 或 composer。最小 split shell 只负责布局、分隔条和生命周期入口。
 
 ## 开发与目录
 

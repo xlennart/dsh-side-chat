@@ -204,13 +204,34 @@ return {
       }
       const location = persistence?.locate?.(header)
       if (location === undefined || location.kind !== 'jsonl') {
-        throw new SideChatError('delete-unsupported', '当前会话存储后端不支持逐会话彻底删除；已保留该侧聊')
+        await release(sessionId)
+        return {
+          sessionId,
+          mode,
+          deleted: false,
+          warning: '当前会话存储后端不支持逐会话彻底删除；已关闭并保留该侧聊',
+        }
       }
       if (typeof harness.deleteSessionArtifact !== 'function') {
-        throw new SideChatError('delete-unsupported', '当前插件载入方式不提供安全文件删除能力；请使用正式本地插件包')
+        await release(sessionId)
+        return {
+          sessionId,
+          mode,
+          deleted: false,
+          warning: '当前插件载入方式不提供安全文件删除能力；已关闭并保留该侧聊',
+        }
       }
       await release(sessionId)
-      await harness.deleteSessionArtifact(location, sessionId)
+      try {
+        await harness.deleteSessionArtifact(location, sessionId)
+      } catch (error) {
+        return {
+          sessionId,
+          mode,
+          deleted: false,
+          warning: `未能彻底删除侧聊，已关闭并保留数据：${error instanceof Error ? error.message : String(error)}`,
+        }
+      }
       return { sessionId, mode, deleted: true }
     }
 

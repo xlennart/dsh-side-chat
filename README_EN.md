@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="release/dsh-side-chat-1.2.0.tgz"><img alt="Version 1.2.0" src="https://img.shields.io/badge/version-1.2.0-2563eb?style=flat-square"></a>
+  <a href="release/dsh-side-chat-1.2.1.tgz"><img alt="Version 1.2.1" src="https://img.shields.io/badge/version-1.2.1-2563eb?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a>
-  <img alt="Tests 24 passing" src="https://img.shields.io/badge/tests-24%20passing-16a34a?style=flat-square">
+  <img alt="Tests 28 passing" src="https://img.shields.io/badge/tests-28%20passing-16a34a?style=flat-square">
   <img alt="DeepSeek Harness plugin" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-0ea5e9?style=flat-square">
 </p>
 
@@ -33,7 +33,7 @@
 
 ## Start Here
 
-- **Just use it:** download [`release/dsh-side-chat-1.2.0.tgz`](release/dsh-side-chat-1.2.0.tgz) and install it with the command below.
+- **Just use it:** download [`release/dsh-side-chat-1.2.1.tgz`](release/dsh-side-chat-1.2.1.tgz) and install it with the command below.
 - **Develop it:** clone the repository, run `npm test`, and let the same command build the plugin and run the regression suite.
 - **What it solves:** open a native DSH session that can ask questions, use tools, and work in the project without leaving the main conversation.
 - **The key boundary:** the main session and side chat share a workspace but keep independent transcripts; the side chat does not automatically copy the full parent conversation.
@@ -58,10 +58,10 @@ Download the prebuilt package from [GitHub Releases](https://github.com/KarlOfLa
 
 ```powershell
 # After downloading from GitHub Releases:
-dsh plugin --profile web add .\dsh-side-chat-1.2.0.tgz
+dsh plugin --profile web add .\dsh-side-chat-1.2.1.tgz
 
 # Or use the in-repo copy:
-dsh plugin --profile web add .\release\dsh-side-chat-1.2.0.tgz
+dsh plugin --profile web add .\release\dsh-side-chat-1.2.1.tgz
 ```
 
 Start DSH from the project that you want the Agent to work in:
@@ -113,9 +113,9 @@ When the plugin is registered from its source directory, DSH loads `dist/formal-
 
 - Each main session keeps its own side-chat state; switching main sessions does not reuse another session's active side chat.
 - "Retain conversation" releases the active Agent but keeps the session on disk. Opening the same mode later restores the most recently retained side chat.
-- "Delete and close" can delete only sessions created by this plugin and requires a storage backend that supports safe per-session deletion. Otherwise, the plugin reports the limitation and keeps the session.
+- "Delete and close" can delete only sessions created by this plugin and supports DSH 0.2 `session.v4.jsonl.zstd` artifacts. If storage deletion fails, the pane still closes, the main conversation returns, and the retained data is reported clearly.
 - When Settings, the plugin market, or another native DSH modal is open, the divider yields pointer interaction and cannot cover or intercept that modal.
-- When Better Sidebar is installed, the two right-side panels are mutually exclusive: opening Side Chat collapses Better Sidebar, and opening Better Sidebar hides Side Chat. Without Better Sidebar, the normal native DSH header layout remains intact.
+- When Better Sidebar is installed, Side Chat can optionally render as a registered page and use the tab's native close control. Its own header entry remains available with or without integration; without integration it opens the native split pane directly.
 - The Side Chat settings page can enable or disable the plugin and choose the native Agent mode used by new side chats.
 
 ## Sessions and Data
@@ -131,13 +131,13 @@ The main session and side chat share the same workspace. File edits, commands, a
 | Capability | Implementation |
 | --- | --- |
 | **Real independent session** | Creates or resumes a Session with `parentSession` through DSH `agents.create/resume`, without occupying subagent routing. |
-| **Complete native UI** | Both panes render the complete `ConversationRoot`; messages, tools, approvals, attachments, composer, model, and access controls remain native DSH features. |
-| **Complete before first send** | Even an empty side chat shows the native header, composer, and hide/close controls; the same native UI remains after sending. |
+| **Complete native UI** | DSH 0.2 renders the side pane through the official `conversation.content` Factory, while 0.1 keeps the `ConversationRoot` compatibility path; messages, tools, approvals, attachments, composer, model, and access controls remain native. |
+| **Complete before first send** | Even an empty side chat shows native conversation content, the composer, and hide/close controls; the same native UI remains after sending. |
 | **On-demand parent context** | The plugin does not copy the parent transcript. `side_chat_context` retrieves bounded, relevant parent excerpts only when needed. |
-| **True side-by-side layout** | Adds only a minimal split shell. The divider supports dragging and keyboard adjustment, with the side pane constrained to 25%-70%. |
+| **True side-by-side layout** | Adds only a minimal split shell. The main conversation remains visible even in narrow hosts; the divider supports dragging and keyboard adjustment, with the side pane constrained to 25%-70%. |
 | **No sidebar pollution** | New side sessions are archived immediately and stay out of the workspace session list. |
 | **Ask about a selection** | Selecting text reveals a "Quote in side chat" action. References can be previewed or removed without leaving an `@` marker or hidden text in the native composer. |
-| **Better Sidebar compatibility** | The two right-side panels automatically make room for each other and align their header controls; the plugin also renders normally when Better Sidebar is absent. |
+| **Better Sidebar compatibility** | Optionally registers a Better Sidebar page while always retaining Side Chat's own shortcut; the complete standalone path remains available when Better Sidebar is absent. |
 | **Hide, restore, or delete** | Hiding only collapses the pane; retained chats can be restored, and closing can safely delete the child session. |
 | **Native modes and models** | New chats default to Standard mode, with PTC, Minimal, and Creation modes available. The native model selector remains available. |
 
@@ -145,8 +145,8 @@ The main session and side chat share the same workspace. File edits, commands, a
 
 - The current selection entry is primarily designed for mouse selection; mobile long-press selection and a touch action bar are not specially optimized yet.
 - A single selected-text reference is limited to 8,000 characters; longer selections are truncated.
-- Complete rendering for an arbitrary Session currently depends on DSH's `SessionProvider` BindingContext seam. If upstream removes that seam, the plugin fails explicitly instead of falling back to a custom chat renderer.
-- Safe permanent deletion requires JSONL session storage and deletion support from the formal local plugin package. Unsupported configurations keep the data and return an explicit error.
+- DSH 0.2 uses the public `SessionProvider` and `conversation.content` Factory. The DSH 0.1 compatibility path still uses the older BindingContext adapter. Either path fails explicitly instead of falling back to a custom chat renderer.
+- Safe permanent deletion supports DSH 0.1/0.2 JSONL and Zstandard JSONL session files and requires deletion support from the formal local package. Unsupported configurations close the pane, restore the main conversation, retain the data, and show a warning.
 - On-demand parent context is intentionally bounded and may not contain every historical detail from the main conversation.
 
 ## Architecture Boundary
@@ -161,7 +161,7 @@ Main Session
       `-- side_chat_context -> bounded, on-demand parent context
 ```
 
-The client keeps the registered DSH conversation component and places it inside two session bindings. The plugin does not implement its own message renderer or composer. The minimal split shell handles only layout, resizing, and lifecycle entry points; it does not take over DSH messages, input, models, attachments, tools, or approvals.
+The client keeps DSH's registered main conversation component and, on DSH 0.2, asks the official Factory to render native conversation content for the side Session; 0.1 uses the compatibility adapter. The plugin does not implement its own message renderer or composer. The split shell owns only layout, resizing, and lifecycle entry points.
 
 ## Development and Project Layout
 

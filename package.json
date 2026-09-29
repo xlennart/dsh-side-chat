@@ -1,6 +1,6 @@
 {
   "name": "dsh-side-chat",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "DeepSeek Harness 原生并排侧聊：归档独立会话、按需主会话上下文、原生会话 UI 与可配置生命周期。",
   "license": "MIT",
   "repository": {
@@ -40,7 +40,6 @@
     "client": {
       "platform": "web",
       "inject": [
-        "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-ui-slots",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-input-trigger",
@@ -50,9 +49,18 @@
     }
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "dsh": ">=0.1.7-rc.2 <0.3.0"
   },
   "devDependencies": {
     "esbuild": "0.28.1"
+  },
+  "peerDependencies": {
+    "dsh-better-sidebar": ">=0.24.1 <0.25.0"
+  },
+  "peerDependenciesMeta": {
+    "dsh-better-sidebar": {
+      "optional": true
+    }
   }
 }

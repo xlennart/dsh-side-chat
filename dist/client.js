@@ -6,9 +6,11 @@ const CSS = `
 .dsh-sc-column{position:relative;display:flex;flex-direction:column;width:100%;max-width:100%;min-width:0;height:100%;background:var(--dsw-alias-bg-base)}
 .dsh-sc-column-main{flex:1 1 100%}
 .dsh-sc-column-side{box-sizing:border-box;flex:1 1 100%}
-.dsh-sc-root-split .dsh-sc-column-main,.dsh-sc-root-split .dsh-sc-resizer{display:none}
+.dsh-sc-root-split .dsh-sc-column-main{display:flex;flex:1 1 0;width:auto;max-width:none}
+.dsh-sc-root-split .dsh-sc-resizer{display:block}
+.dsh-sc-root-split .dsh-sc-column-side{flex:0 0 var(--dsh-sc-side-width,50%);width:auto;max-width:none}
 .dsh-sc-column-side:not(:has([data-slot="conversation.composer.dock"]>*)){padding-bottom:24px}
-.dsh-sc-column>[data-phase]{flex:1;min-height:0}
+.dsh-sc-column>[data-phase],.dsh-sc-column>[data-conversation-content]{flex:1;min-height:0}
 .dsh-sc-column-side [data-conversation-scroll]>[data-composer-seat]{margin-top:auto}
 .dsh-sc-resizer{position:relative;z-index:1;flex:0 0 7px;margin:0 -3px;cursor:col-resize;touch-action:none;outline:none}
 .dsh-sc-resizer::after{content:'';position:absolute;top:0;bottom:0;left:3px;width:1px;background:var(--dsw-alias-border-l2);transition:width .12s,background .12s}
@@ -46,6 +48,7 @@ body:has(.dsh-sc-root-split)>div:has([data-dsh-better-sidebar]){z-index:21474836
 body:has(.dsh-sc-root-split) [data-dsh-better-sidebar] [data-dsh-toggle-cluster]{z-index:2147483647!important}
 body:has(.dsh-sc-root-split) .dsh-sc-column-side [data-phase] header{padding-right:72px}
 .dsh-sc-side-utilities{display:inline-flex;align-items:center;gap:4px}.dsh-sc-side-utilities .dsh-sc-action{width:28px;height:28px;min-height:28px;padding:0}
+.dsh-sc-factory-controls{position:absolute;top:10px;right:12px;z-index:20;display:flex;padding:2px;border-radius:999px;background:var(--dsw-alias-bg-elevated);box-shadow:0 2px 10px rgba(0,0,0,.08)}
 body:has(.dsh-sc-root-split):has([data-dsh-better-sidebar] [data-dsh-toggle-cluster]) .dsh-sc-side-utilities{transform:translateY(-11px)}
 .dsh-sc-error{position:absolute;right:14px;bottom:14px;z-index:20;max-width:360px;padding:9px 12px;border:1px solid var(--dsw-alias-border-l2);border-radius:9px;background:var(--dsw-alias-bg-elevated);color:var(--dsw-alias-label-secondary);font-size:12px}
 .dsh-sc-settings{width:min(760px,100%);padding:8px 0 40px;color:var(--dsw-alias-label-primary)}
@@ -54,7 +57,6 @@ body:has(.dsh-sc-root-split):has([data-dsh-better-sidebar] [data-dsh-toggle-clus
 .dsh-sc-settings-title{font-size:14px;font-weight:500}.dsh-sc-settings-desc{margin-top:4px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5}
 .dsh-sc-settings-select{min-width:148px;height:34px;padding:0 30px 0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);font:inherit;font-size:13px}
 .dsh-sc-switch{position:relative;width:36px;height:20px;flex:none}.dsh-sc-switch input{position:absolute;opacity:0;pointer-events:none}.dsh-sc-switch span{display:block;width:100%;height:100%;border-radius:10px;background:var(--dsw-alias-border-l2);transition:background .15s}.dsh-sc-switch span::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-bg-elevated);box-shadow:0 1px 3px rgba(0,0,0,.22);transition:transform .15s}.dsh-sc-switch input:checked+span{background:var(--dsw-alias-state-business-primary)}.dsh-sc-switch input:checked+span::after{transform:translateX(16px)}.dsh-sc-switch input:focus-visible+span{outline:2px solid var(--dsw-alias-state-business-primary);outline-offset:2px}
-@container dsh-side-chat (min-width:981px){.dsh-sc-root-split .dsh-sc-column-main{display:flex;flex:1 1 0;width:auto;max-width:none}.dsh-sc-root-split .dsh-sc-resizer{display:block}.dsh-sc-root-split .dsh-sc-column-side{flex:0 0 var(--dsh-sc-side-width,50%);width:auto;max-width:none}}
 `
 
 const PREFERENCE_KEY = 'dsh-side-chat.preferences.v1'
@@ -73,26 +75,30 @@ const CLOSE_BEHAVIOR_OPTIONS = Object.freeze([
 ])
 
 function storedPreferences() {
-  const fallback = { enabled: true, preset: 'standard', closeBehavior: 'ask' }
+  const fallback = { enabled: true, preset: 'standard', closeBehavior: 'ask', integrateBetterSidebar: false }
   try {
     const parsed = JSON.parse(globalThis.localStorage?.getItem(PREFERENCE_KEY) ?? 'null')
     return {
       enabled: typeof parsed?.enabled === 'boolean' ? parsed.enabled : fallback.enabled,
       preset: PRESET_OPTIONS.some(option => option.id === parsed?.preset) ? parsed.preset : fallback.preset,
       closeBehavior: CLOSE_BEHAVIOR_OPTIONS.some(option => option.id === parsed?.closeBehavior) ? parsed.closeBehavior : fallback.closeBehavior,
+      integrateBetterSidebar: typeof parsed?.integrateBetterSidebar === 'boolean'
+        ? parsed.integrateBetterSidebar
+        : fallback.integrateBetterSidebar,
     }
   } catch (_error) {
     return fallback
   }
 }
-
-const initialState = Object.freeze({ sides: new Map(), busy: false, dialog: null, sideRatio: 50, error: '', errorParentId: null, ...storedPreferences() })
+const initialState = Object.freeze({ sides: new Map(), busy: false, dialog: null, sideRatio: 50, error: '', errorParentId: null, betterSidebarAvailable: false, ...storedPreferences() })
 let uiState = initialState
 const subscribers = new Set()
 let sessionsService = null
 let NativeConversationRoot = null
 let projectedSideSessions = new WeakMap()
 let projectedSideProvideInfos = new WeakMap()
+let betterSidebarService = null
+const conversationKits = new Map()
 
 function update(patch) {
   uiState = Object.freeze({ ...uiState, ...patch })
@@ -189,6 +195,7 @@ function updatePreferences(patch) {
       enabled: uiState.enabled,
       preset: uiState.preset,
       closeBehavior: uiState.closeBehavior,
+      integrateBetterSidebar: uiState.integrateBetterSidebar,
     }))
   } catch (_error) {}
 }
@@ -218,15 +225,37 @@ async function rpc(method, input) {
   return host.call(method, input)
 }
 
+function usesBetterSidebar(state = uiState) {
+  return state.integrateBetterSidebar === true && state.betterSidebarAvailable === true && betterSidebarService !== null
+}
+
+function openBetterSidebarTab(parentId) {
+  if (!usesBetterSidebar()) return false
+  betterSidebarService.openTab({
+    type: 'dsh-side-chat:conversation',
+    id: `dsh-side-chat:${parentId}`,
+    title: '侧边聊天',
+    meta: { parentSessionId: parentId },
+  }, { sessionId: parentId })
+  return true
+}
+
+function closeBetterSidebarTab(parentId) {
+  if (betterSidebarService === null || typeof betterSidebarService.closeTab !== 'function') return false
+  betterSidebarService.closeTab(`dsh-side-chat:${parentId}`)
+  return true
+}
+
 async function openSide(parentId, anchorText = '') {
   if (!uiState.enabled || uiState.busy) return
-  closeBetterSidebarPanel()
+  if (!usesBetterSidebar()) closeBetterSidebarPanel()
   if (uiState.sides.has(parentId)) {
     const side = uiState.sides.get(parentId)
     const selections = appendSelection(side?.selections, anchorText)
     patchSide(parentId, { hidden: false, selections })
     persistSelections(side.sideId, selections)
     update({ error: '', errorParentId: null })
+    openBetterSidebarTab(parentId)
     return
   }
   update({ busy: true, error: '', errorParentId: null })
@@ -236,6 +265,7 @@ async function openSide(parentId, anchorText = '') {
     setSide(parentId, { sideId: result.sessionId, hidden: false, selections })
     persistSelections(result.sessionId, selections)
     update({ dialog: null, busy: false })
+    openBetterSidebarTab(parentId)
   } catch (error) {
     update({ busy: false, error: error instanceof Error ? error.message : String(error), errorParentId: parentId })
   }
@@ -245,11 +275,18 @@ async function finishClose(mode, parentId, sideId) {
   if (uiState.sides.get(parentId)?.sideId !== sideId || uiState.busy) return
   update({ busy: true, error: '', errorParentId: null })
   try {
-    await rpc('sideChat.close', { sessionId: sideId, mode })
-    if (mode === 'delete') persistSelections(sideId, [])
+    const result = await rpc('sideChat.close', { sessionId: sideId, mode })
+    if (result.deleted === true) persistSelections(sideId, [])
+    closeBetterSidebarTab(parentId)
     const sides = new Map(uiState.sides)
     sides.delete(parentId)
-    update({ sides, busy: false, dialog: null })
+    update({
+      sides,
+      busy: false,
+      dialog: null,
+      error: typeof result.warning === 'string' ? result.warning : '',
+      errorParentId: typeof result.warning === 'string' ? parentId : null,
+    })
   } catch (error) {
     update({ busy: false, dialog: null, error: error instanceof Error ? error.message : String(error), errorParentId: parentId })
   }
@@ -656,8 +693,15 @@ function HeaderAction({ sessionId }) {
   const side = state.sides.get(sessionId)
   let action
   if (side !== undefined) {
-    if (!side.hidden) return null
-    action = h(IconAction, { label: '显示侧聊', onClick: () => patchSide(sessionId, { hidden: false }) }, h(SideChatIcon))
+    if (usesBetterSidebar(state)) {
+      action = h(IconAction, {
+        label: '在 Better Sidebar 中打开侧聊',
+        onClick: () => openBetterSidebarTab(sessionId),
+      }, h(SideChatIcon))
+    } else {
+      if (!side.hidden) return null
+      action = h(IconAction, { label: '显示侧聊', onClick: () => patchSide(sessionId, { hidden: false }) }, h(SideChatIcon))
+    }
   } else {
     action = h(IconAction, {
       label: state.busy ? '正在开启侧聊' : '打开侧聊',
@@ -684,6 +728,19 @@ function SettingsSection() {
     h('div', { className: 'dsh-sc-settings-row' },
       h('div', null, h('div', { className: 'dsh-sc-settings-title' }, '启用侧边聊天'), h('div', { className: 'dsh-sc-settings-desc' }, '关闭后隐藏侧聊入口和并排窗口。')),
       h(Toggle, { checked: state.enabled, label: '启用侧边聊天', onChange: enabled => updatePreferences({ enabled }) }),
+    ),
+    h('div', { className: 'dsh-sc-settings-row' },
+      h('div', null,
+        h('div', { className: 'dsh-sc-settings-title' }, '融入 Better Sidebar'),
+        h('div', { className: 'dsh-sc-settings-desc' }, state.betterSidebarAvailable
+          ? '开启后把侧聊作为 Better Sidebar 的原生右栏页面，同时保留 Side Chat 自己的快捷入口。'
+          : '未检测到兼容的 Better Sidebar；独立侧聊入口保持可用。'),
+      ),
+      h(Toggle, {
+        checked: state.integrateBetterSidebar && state.betterSidebarAvailable,
+        label: '融入 Better Sidebar',
+        onChange: integrateBetterSidebar => updatePreferences({ integrateBetterSidebar }),
+      }),
     ),
     h('div', { className: 'dsh-sc-settings-row' },
       h('div', null, h('div', { className: 'dsh-sc-settings-title' }, '新侧聊模式'), h('div', { className: 'dsh-sc-settings-desc' }, '使用 DSH 原生 Agent 预设；已有侧聊保持原模式。')),
@@ -760,6 +817,87 @@ function SideNativeConversation({ kit, providedInfo }) {
   })
 }
 
+function FixedChatConversationView({ renderSlot }) {
+  return h(React.Fragment, null, renderSlot('conversation.session', { view: 'chat' }))
+}
+
+function FactorySideConversation({ renderFactorySlot }) {
+  return renderFactorySlot('conversation.content', {
+    variant: 'embedded',
+    phase: 'active',
+    hero: false,
+  }, { slots: { views: FixedChatConversationView } })
+}
+
+function FactorySidePane({ reference, renderFactorySlot, SessionProvider, sideId }) {
+  return h('section', { className: 'dsh-sc-column dsh-sc-column-side', 'data-side-chat-side': '', 'data-side-chat-renderer': 'factory' },
+    reference === undefined
+      ? h('div', { className: 'dsh-sc-error' }, '正在连接原生侧聊会话…')
+      : h(SessionProvider, { session: reference, key: sideId },
+        h(FactorySideConversation, { renderFactorySlot }),
+      ),
+    h('div', { className: 'dsh-sc-factory-controls' }, h(SideUtilities, { sessionId: sideId })),
+  )
+}
+
+function IntegratedSidebarConversation({ scope }) {
+  const state = useSideState()
+  const parentId = scope.sessionId
+  const side = state.sides.get(parentId)
+  const sideId = side?.sideId
+  const kit = conversationKits.get(parentId)
+  const [reference, setReference] = React.useState(undefined)
+
+  React.useEffect(() => {
+    if (!state.enabled || !usesBetterSidebar(state) || sideId === undefined) {
+      setReference(undefined)
+      return undefined
+    }
+    let retained
+    try {
+      retained = sessionsService?.retain?.(sideId, { source: 'sideChatBetterSidebar' })
+        ?? sessionsService?.retainAgentScope?.(sideId)
+      setReference(retained)
+      void Promise.resolve(retained?.ready ?? retained?.binding?.session?.open?.()).catch(error => {
+        update({ error: error instanceof Error ? error.message : String(error), errorParentId: parentId })
+      })
+    } catch (error) {
+      update({ error: error instanceof Error ? error.message : String(error), errorParentId: parentId })
+    }
+    return () => retained?.release?.()
+  }, [state.enabled, state.integrateBetterSidebar, state.betterSidebarAvailable, parentId, sideId])
+
+  React.useEffect(() => {
+    if (state.enabled && usesBetterSidebar(state) && side === undefined && !state.busy) void openSide(parentId)
+  }, [state.enabled, state.integrateBetterSidebar, state.betterSidebarAvailable, state.busy, parentId, side])
+
+  if (!state.enabled) return h('div', { className: 'dsh-sc-error' }, '侧边聊天已停用')
+  if (!usesBetterSidebar(state)) return h('div', { className: 'dsh-sc-error' }, '请在侧边聊天设置中开启 Better Sidebar 融合')
+  if (kit === undefined || sideId === undefined || reference === undefined) {
+    return h('section', { className: 'dsh-sc-column dsh-sc-column-side', 'data-side-chat-renderer': 'better-sidebar' },
+      h('div', { className: 'dsh-sc-error' }, state.errorParentId === parentId && state.error !== '' ? state.error : '正在连接原生侧聊会话…'),
+    )
+  }
+  return h('section', {
+    className: 'dsh-sc-column dsh-sc-column-side',
+    'data-side-chat-renderer': 'better-sidebar',
+  },
+  h(kit.SessionProvider, { session: reference, key: sideId }, h(FactorySideConversation, { renderFactorySlot: kit.renderFactorySlot })))
+}
+
+function LegacySidePane({ providedInfo, kit, SessionProvider, sideId }) {
+  const providerProbe = SessionProvider({ empty: () => null, children: () => null })
+  const BindingProvider = providerProbe.type
+  const projectedSideInfo = providedInfo === undefined ? undefined : projectSideProvideInfo(providedInfo)
+  return h('section', { className: 'dsh-sc-column dsh-sc-column-side', 'data-side-chat-side': '', 'data-side-chat-renderer': 'legacy' },
+    projectedSideInfo === undefined
+      ? h('div', { className: 'dsh-sc-error' }, '正在连接原生侧聊会话…')
+      : h(BindingProvider, { value: projectedSideInfo, key: sideId },
+        h(SideNativeConversation, { kit, providedInfo: projectedSideInfo }),
+      ),
+  )
+}
+
 function CloseDialog({ parentId, sideId }) {
   const state = useSideState()
   const [remember, setRemember] = React.useState(false)
@@ -791,28 +929,62 @@ function ParallelConversation(props) {
   const state = useSideState()
   const sideState = state.sides.get(props.sessionId)
   const ownsSide = state.enabled && sideState !== undefined
-  const sideVisible = ownsSide && sideState.hidden !== true
+  const integrated = usesBetterSidebar(state)
+  const sideVisible = ownsSide && sideState.hidden !== true && !integrated
   const sideId = sideState?.sideId ?? null
   const splitRef = React.useRef(null)
   const mainRef = React.useRef(null)
   const [selection, setSelection] = React.useState(null)
-  const [sideInfo, setSideInfo] = React.useState(undefined)
+  const [sideBinding, setSideBinding] = React.useState(undefined)
   const betterSidebarOpen = useBetterSidebarPanelOpen(sideVisible)
   useBetterSidebarAutoHide(sideVisible, props.sessionId)
   const SessionProvider = props.SessionProvider
+  const factoryMode = typeof props.renderFactorySlot === 'function'
+  if (factoryMode) conversationKits.set(props.sessionId, {
+    renderFactorySlot: props.renderFactorySlot,
+    SessionProvider: props.SessionProvider,
+  })
 
-  // DSH currently exposes only a current-session SessionProvider. Calling its stable
-  // component unconditionally reveals the framework-owned BindingContext.Provider;
-  // we then supply the arbitrary child SessionProvideInfo without copying any UI.
-  const providerProbe = SessionProvider({ empty: () => null, children: () => null })
-  const BindingProvider = providerProbe.type
+  React.useEffect(() => () => { conversationKits.delete(props.sessionId) }, [props.sessionId])
+
+  React.useEffect(() => {
+    if (integrated && ownsSide) openBetterSidebarTab(props.sessionId)
+  }, [integrated, ownsSide, props.sessionId])
 
   React.useEffect(() => {
     if (!state.enabled || !ownsSide) {
-      setSideInfo(undefined)
+      setSideBinding(undefined)
       return undefined
     }
     let cancelled = false
+    if (factoryMode) {
+      let reference
+      let ready
+      try {
+        reference = sessionsService?.retain?.(sideId, { source: 'sideChat' })
+        ready = reference?.ready
+      } catch (error) {
+        try {
+          reference = sessionsService?.retainAgentScope?.(sideId)
+          ready = reference?.binding?.session?.open?.()
+        } catch (fallbackError) {
+          const failure = fallbackError ?? error
+          update({ error: failure instanceof Error ? failure.message : String(failure), errorParentId: props.sessionId })
+        }
+      }
+      if (reference === undefined) {
+        update({ error: 'DSH 0.2 无法保留侧聊会话', errorParentId: props.sessionId })
+        return undefined
+      }
+      setSideBinding({ kind: 'factory', sideId, reference })
+      Promise.resolve(ready).catch(error => {
+        if (!cancelled) update({ error: error instanceof Error ? error.message : String(error), errorParentId: props.sessionId })
+      })
+      return () => {
+        cancelled = true
+        reference.release?.()
+      }
+    }
     let attempts = 0
     const connect = () => {
       if (cancelled) return
@@ -820,7 +992,7 @@ function ParallelConversation(props) {
       const session = sessionsService?.binding?.(sideId)?.session
       if (info !== undefined && typeof session?.open === 'function') {
         void session.open().then(() => {
-          if (!cancelled) setSideInfo(info)
+          if (!cancelled) setSideBinding({ kind: 'legacy', sideId, providedInfo: info })
         }).catch(error => {
           if (!cancelled) update({ error: error instanceof Error ? error.message : String(error), errorParentId: props.sessionId })
         })
@@ -832,7 +1004,7 @@ function ParallelConversation(props) {
     }
     connect()
     return () => { cancelled = true }
-  }, [state.enabled, ownsSide, sideId, props.sessionId])
+  }, [state.enabled, ownsSide, sideId, props.sessionId, factoryMode])
 
   React.useEffect(() => {
     setSelection(null)
@@ -925,16 +1097,20 @@ function ParallelConversation(props) {
     : null
   let side = null
   if (sideVisible) {
-    const currentSideInfo = sideInfo?.sessionId === sideId ? sideInfo : undefined
-    const projectedSideInfo = currentSideInfo === undefined ? undefined : projectSideProvideInfo(currentSideInfo)
-    const sidePanel = h('section', { className: 'dsh-sc-column dsh-sc-column-side', 'data-side-chat-side': '' },
-      projectedSideInfo === undefined
-        ? h('div', { className: 'dsh-sc-error' }, '正在连接原生侧聊会话…')
-        : h(BindingProvider, { value: projectedSideInfo, key: sideId },
-          h(SideNativeConversation, { kit: props, providedInfo: projectedSideInfo }),
-        ),
-    )
-    side = sidePanel
+    const current = sideBinding?.sideId === sideId ? sideBinding : undefined
+    side = factoryMode
+      ? h(FactorySidePane, {
+        reference: current?.kind === 'factory' ? current.reference : undefined,
+        renderFactorySlot: props.renderFactorySlot,
+        SessionProvider,
+        sideId,
+      })
+      : h(LegacySidePane, {
+        providedInfo: current?.kind === 'legacy' ? current.providedInfo : undefined,
+        kit: props,
+        SessionProvider,
+        sideId,
+      })
   }
   if (!state.enabled) return h(NativeConversationRoot, props)
   return h(React.Fragment, null,
@@ -972,10 +1148,11 @@ function adoptNativeConversation(slots, timer, {
   let previousComponent
   let cancelDeadline
 
-  const pulse = () => {
+  const pulse = (key) => {
+    if (key === undefined) return
     // During layout/HMR teardown the declaration may already have collapsed.
-    if (typeof core.specDynamic === 'function' && core.specDynamic('conversation') === undefined) return
-    const release = core.register({ name: 'conversation', priority: -100 }, () => null)
+    if (typeof core.specDynamic === 'function' && core.specDynamic(key) === undefined) return
+    const release = core.register({ name: key, priority: -100 }, () => null)
     release()
   }
   const clearDeadline = () => {
@@ -1006,47 +1183,65 @@ function adoptNativeConversation(slots, timer, {
       cancel()
     }
   }
+  let adoptedKey
   const releaseAdoption = () => {
     if (adoptedEntry === undefined) return
     const entry = adoptedEntry
+    const key = adoptedKey
     const previous = previousComponent
     adoptedEntry = undefined
+    adoptedKey = undefined
     previousComponent = undefined
     if (entry.component === ParallelConversation) {
       entry.component = previous
-      pulse()
+      pulse(key)
     }
     if (NativeConversationRoot === previous) NativeConversationRoot = null
   }
   const findNativeEntry = () => {
-    const entries = core.entries('conversation')
-    return Array.isArray(entries)
-      ? entries.find(entry => entry?.children?.['conversation.session'] !== undefined
+    const factory = typeof core.factory === 'function' ? core.factory('conversation.content') : undefined
+    const modernEntries = factory === undefined ? [] : core.entries('main.conversation')
+    const modern = Array.isArray(modernEntries)
+      ? modernEntries.find(entry => entry?.children?.['conversation.header'] !== undefined)
+      : undefined
+    if (modern !== undefined) return { entry: modern, key: 'main.conversation' }
+    const legacyEntries = core.entries('conversation')
+    const legacy = Array.isArray(legacyEntries)
+      ? legacyEntries.find(entry => entry?.children?.['conversation.session'] !== undefined
         && entry?.children?.['conversation.composer.bar'] !== undefined)
       : undefined
+    return legacy === undefined ? undefined : { entry: legacy, key: 'conversation' }
   }
   const reconcile = () => {
     if (disposed || !watching) return
-    const nativeEntry = findNativeEntry()
+    const target = findNativeEntry()
     if (adoptedEntry !== undefined) {
-      if (nativeEntry === adoptedEntry && adoptedEntry.component === ParallelConversation) return
+      if (target?.entry === adoptedEntry && target.key === adoptedKey && adoptedEntry.component === ParallelConversation) return
       releaseAdoption()
     }
-    if (nativeEntry === undefined || nativeEntry.component === ParallelConversation) {
+    if (target === undefined || target.entry.component === ParallelConversation) {
       armDeadline()
       return
     }
-    previousComponent = nativeEntry.component
-    adoptedEntry = nativeEntry
+    previousComponent = target.entry.component
+    adoptedEntry = target.entry
+    adoptedKey = target.key
     NativeConversationRoot = previousComponent
-    nativeEntry.component = ParallelConversation
+    target.entry.component = ParallelConversation
     clearDeadline()
     // A transient lower-priority occupant changes the conversation version once,
     // so an already-mounted page adopts the new face without owning child slots.
-    pulse()
+    pulse(target.key)
   }
 
-  unsubscribe = core.subscribe('conversation', reconcile)
+  const releases = [core.subscribe('conversation', reconcile)]
+  if (typeof core.factory === 'function' && typeof core.subscribeFactory === 'function') {
+    releases.push(core.subscribe('main.conversation', reconcile))
+    releases.push(core.subscribeFactory('conversation.content', reconcile))
+  }
+  unsubscribe = () => {
+    for (const release of releases.splice(0)) release()
+  }
   reconcile()
   return () => {
     if (disposed) return
@@ -1066,6 +1261,31 @@ return {
     styles.insert(CSS)
 
     const releaseConversation = adoptNativeConversation(slots, timer)
+    ctx.inject(['betterSidebar'], injected => {
+      const service = injected.get('betterSidebar')
+      if (service === undefined || typeof service.registerTab !== 'function') return
+      betterSidebarService = service
+      update({ betterSidebarAvailable: true })
+      injected.effect(() => {
+        const releaseTab = service.registerTab({
+          id: 'dsh-side-chat:conversation',
+          title: '侧边聊天',
+          description: '使用独立 DSH Session 的原生侧聊',
+          icon: SideChatIcon,
+          order: 36,
+          single: true,
+          available: () => uiState.integrateBetterSidebar === true,
+          component: IntegratedSidebarConversation,
+        })
+        return () => {
+          releaseTab()
+          if (betterSidebarService === service) {
+            betterSidebarService = null
+            update({ betterSidebarAvailable: false })
+          }
+        }
+      }, 'dsh-side-chat: better-sidebar tab')
+    })
 
     slots.inject('conversation.session.header.actions', () => slots.register({
       name: 'conversation.session.header.actions',
@@ -1097,6 +1317,8 @@ return {
       releasePromptProjection()
       subscribers.clear()
       sessionsService = null
+      betterSidebarService = null
+      conversationKits.clear()
       projectedSideSessions = new WeakMap()
       projectedSideProvideInfos = new WeakMap()
       uiState = initialState

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.2.1 (2026-09-30)
+
+- Restore compatibility with official DeepSeek Harness `0.2.0-rc.1` after the legacy client runtime and `conversation` slot were removed.
+- Render the side Session through the new public `conversation.content` Component Factory and `SessionProvider`, while retaining the DSH 0.1 compatibility path.
+- Remove the obsolete `@deepseek-ai/dsh-client-runtime` module-table dependency and add DSH engine compatibility metadata.
+- Normalize source newlines in the formal package builder so clean Windows worktrees build deterministically.
+- Keep the main conversation visible at every container width instead of replacing it with the side pane below 981px.
+- Preserve the plugin's own header entry when Better Sidebar integration is enabled, and close the integrated tab when its side session closes.
+- Let Better Sidebar's native tab close control own the integrated-page lifecycle instead of rendering a duplicate floating close button.
+- Support DSH 0.2 `session.v4.jsonl(.zstd)` deletion; deletion failures now close the pane, restore the main conversation, and report that data was retained.
+
 ## 1.2.0 (2026-08-28)
 
 - Keep Side Chat and Better Sidebar mutually exclusive: opening either panel automatically makes room by hiding the other.

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-const client = await readFile(new URL('../src/client.js', import.meta.url), 'utf8')
+const client = (await readFile(new URL('../src/client.js', import.meta.url), 'utf8')).replace(/\r\n/g, '\n')
 const functionStart = client.indexOf('function adoptNativeConversation')
 const functionEnd = client.indexOf('\n\nreturn {', functionStart)
 assert.notEqual(functionStart, -1, 'adoptNativeConversation source is missing')
@@ -39,6 +39,12 @@ function createEntry(component = function NativeConversation() {}) {
   return entry
 }
 
+function createModernEntry(component = function ModernConversation() {}) {
+  const entry = createEntry(component)
+  entry.children = { 'conversation.header': { kind: 'single' } }
+  return entry
+}
+
 function createSlots(initialEntries = []) {
   let entries = initialEntries
   const listeners = new Set()
@@ -67,6 +73,51 @@ function createSlots(initialEntries = []) {
     },
     notify() {
       for (const listener of [...listeners]) listener()
+    },
+  }
+}
+
+function createModernSlots(initialEntries = []) {
+  let entries = initialEntries
+  let factory = { name: 'conversation.content' }
+  const listeners = new Map([
+    ['conversation', new Set()],
+    ['main.conversation', new Set()],
+    ['factory:conversation.content', new Set()],
+  ])
+  const pulses = []
+  const notify = key => {
+    for (const listener of [...listeners.get(key)]) listener()
+  }
+  const core = {
+    entries: key => key === 'main.conversation' ? entries : [],
+    factory: key => key === 'conversation.content' ? factory : undefined,
+    subscribe: (key, listener) => {
+      listeners.get(key).add(listener)
+      return () => listeners.get(key).delete(listener)
+    },
+    subscribeFactory: (key, listener) => {
+      assert.equal(key, 'conversation.content')
+      listeners.get('factory:conversation.content').add(listener)
+      return () => listeners.get('factory:conversation.content').delete(listener)
+    },
+    specDynamic: key => key === 'main.conversation' ? { kind: 'single', scope: 'session-maybe' } : undefined,
+    register: options => {
+      pulses.push(options)
+      return () => pulses.push({ ...options, released: true })
+    },
+  }
+  return {
+    slots: { _core: core },
+    pulses,
+    listenerCount: () => [...listeners.values()].reduce((sum, values) => sum + values.size, 0),
+    setEntries(next) {
+      entries = next
+      notify('main.conversation')
+    },
+    setFactory(next) {
+      factory = next
+      notify('factory:conversation.content')
     },
   }
 }
@@ -127,6 +178,29 @@ test('adopts an already registered native conversation exactly once and restores
   assert.deepEqual(entry.writes, [ParallelConversation, original])
   assert.equal(slots.listenerCount(), 0)
   assert.equal(slots.pulseCount(), 4)
+})
+test('adopts the 0.2 main conversation only after its public content factory is ready', () => {
+  const { adoptNativeConversation, nativeRoot } = loadAdoption(ParallelConversation)
+  const entry = createModernEntry()
+  const original = entry.component
+  const slots = createModernSlots([entry])
+  slots.setFactory(undefined)
+  const timer = createTimer()
+
+  const dispose = adoptNativeConversation(slots.slots, timer.timer)
+  assert.equal(entry.component, original)
+  assert.equal(timer.pendingCount(), 1)
+
+  slots.setFactory({ name: 'conversation.content' })
+  assert.equal(entry.component, ParallelConversation)
+  assert.equal(nativeRoot(), original)
+  assert.equal(timer.pendingCount(), 0)
+  assert.deepEqual(slots.pulses[0], { name: 'main.conversation', priority: -100 })
+
+  dispose()
+  assert.equal(entry.component, original)
+  assert.equal(nativeRoot(), null)
+  assert.equal(slots.listenerCount(), 0)
 })
 
 test('waits when Side Chat starts first and follows native conversation remounts', () => {

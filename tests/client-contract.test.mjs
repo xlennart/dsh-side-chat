@@ -6,9 +6,11 @@ const client = await readFile(new URL('../src/client.js', import.meta.url), 'utf
 
 test('client adopts the one native conversation declaration and reuses its inner slots', () => {
   assert.match(client, /core\.entries\('conversation'\)/)
-  assert.match(client, /core\.subscribe\('conversation', reconcile\)/)
-  assert.match(client, /nativeEntry\.component = ParallelConversation/)
-  assert.match(client, /name: 'conversation', priority: -100/)
+  assert.match(client, /core\.entries\('main\.conversation'\)/)
+  assert.match(client, /core\.factory\('conversation\.content'\)/)
+  assert.match(client, /core\.subscribeFactory\('conversation\.content', reconcile\)/)
+  assert.match(client, /target\.entry\.component = ParallelConversation/)
+  assert.match(client, /core\.register\(\{ name: key, priority: -100 \}/)
   for (const slot of ['conversation.session', 'conversation.composer.bar']) {
     assert.match(client, new RegExp(slot.replaceAll('.', '\\.')))
   }
@@ -19,7 +21,6 @@ test('client adopts the one native conversation declaration and reuses its inner
   assert.match(client, /h\(SideNativeConversation/)
   assert.doesNotMatch(client, /shell\.overlay|name: 'details'|openDetails|closeDetails/)
 })
-
 test('client contains the requested delete-or-keep and selection entry interactions', () => {
   assert.match(client, /删除并关闭/)
   assert.match(client, /保留对话/)
@@ -80,8 +81,33 @@ test('settings expose enablement and native preset choices', () => {
   assert.match(client, /始终保留/)
   assert.match(client, /始终删除/)
   assert.match(client, /closeBehavior/)
+  assert.match(client, /融入 Better Sidebar/)
+  assert.match(client, /integrateBetterSidebar/)
+  assert.match(client, /同时保留 Side Chat 自己的快捷入口/)
+  assert.match(client, /未检测到兼容的 Better Sidebar；独立侧聊入口保持可用。/)
   assert.doesNotMatch(client, /showModelSelector|data-show-model-selector/)
   assert.doesNotMatch(client, /显示模型选择/)
+})
+
+test('Better Sidebar integration is optional and preserves the standalone entry fallback', () => {
+  assert.match(client, /ctx\.inject\(\['betterSidebar'\]/)
+  assert.match(client, /service\.registerTab\(\{/)
+  assert.match(client, /id: 'dsh-side-chat:conversation'/)
+  assert.match(client, /component: IntegratedSidebarConversation/)
+  assert.match(client, /function usesBetterSidebar/)
+  assert.doesNotMatch(client, /if \(usesBetterSidebar\(state\)\) return null/)
+  assert.match(client, /label: '在 Better Sidebar 中打开侧聊'/)
+  assert.match(client, /onClick: \(\) => openBetterSidebarTab\(sessionId\)/)
+  assert.match(client, /betterSidebarService\.closeTab\(`dsh-side-chat:\$\{parentId\}`\)/)
+  assert.match(client, /if \(!usesBetterSidebar\(\)\) closeBetterSidebarPanel\(\)/)
+  assert.match(client, /openBetterSidebarTab\(parentId\)/)
+  assert.match(client, /data-side-chat-renderer': 'better-sidebar'/)
+  const integratedView = client.slice(
+    client.indexOf('function IntegratedSidebarConversation'),
+    client.indexOf('function LegacySidePane'),
+  )
+  assert.doesNotMatch(integratedView, /dsh-sc-factory-controls/)
+  assert.doesNotMatch(integratedView, /CloseDialog/)
 })
 
 test('side session uses framework BindingContext provider and arbitrary provideInfo', () => {
@@ -94,6 +120,13 @@ test('side session uses framework BindingContext provider and arbitrary provideI
   assert.match(client, /function projectSideProvideInfo/)
   assert.match(client, /getSnapshot: \(\) => projectSideSession\(source\.getSnapshot\(\)\)/)
   assert.match(client, /composerPhase: 'active'/)
+  assert.match(client, /sessionsService\?\.retain\?\.\(sideId, \{ source: 'sideChat' \}\)/)
+  assert.match(client, /sessionsService\?\.retainAgentScope\?\.\(sideId\)/)
+  assert.match(client, /h\(SessionProvider, \{ session: reference/)
+  assert.match(client, /renderFactorySlot\('conversation\.content'/)
+  assert.match(client, /variant: 'embedded'/)
+  assert.match(client, /function FixedChatConversationView/)
+  assert.match(client, /data-side-chat-renderer': 'factory'/)
 })
 
 test('parallel shell aligns, resizes, hides and restores the native side conversation', () => {
@@ -128,14 +161,16 @@ test('parallel shell aligns, resizes, hides and restores the native side convers
   assert.match(client, /\.dsh-sc-modal-backdrop\{position:fixed;inset:0;z-index:2147483647/)
 })
 
-test('parallel shell adapts to its actual container without widening narrow hosts', () => {
+test('parallel shell always preserves the main conversation in narrow hosts', () => {
   assert.match(client, /container-name:dsh-side-chat;container-type:inline-size/)
   assert.match(client, /\.dsh-sc-column\{[^}]*width:100%;max-width:100%;min-width:0/)
-  assert.match(client, /\.dsh-sc-root-split \.dsh-sc-column-main,\.dsh-sc-root-split \.dsh-sc-resizer\{display:none\}/)
-  assert.match(client, /@container dsh-side-chat \(min-width:981px\)/)
+  assert.match(client, /\.dsh-sc-root-split \.dsh-sc-column-main\{display:flex;flex:1 1 0;width:auto;max-width:none\}/)
+  assert.match(client, /\.dsh-sc-root-split \.dsh-sc-resizer\{display:block\}/)
   assert.match(client, /\.dsh-sc-root-split \.dsh-sc-column-side\{flex:0 0 var\(--dsh-sc-side-width,50%\);width:auto;max-width:none\}/)
   assert.match(client, /data-side-chat-layout': sideVisible \? 'split' : 'single'/)
+  assert.doesNotMatch(client, /\.dsh-sc-root-split \.dsh-sc-column-main[^}]*display:none/)
   assert.doesNotMatch(client, /min-width:440px/)
+  assert.doesNotMatch(client, /@container dsh-side-chat/)
   assert.doesNotMatch(client, /@media\(max-width:980px\)/)
 })
 
@@ -175,5 +210,5 @@ test('multiple main conversations retain independent side sessions', () => {
   assert.match(client, /choose\('keep'\)/)
   assert.match(client, /choose\('delete'\)/)
   assert.match(client, /记住此选择/)
-  assert.match(client, /sideInfo\?\.sessionId === sideId/)
+  assert.match(client, /sideBinding\?\.sideId === sideId/)
 })
