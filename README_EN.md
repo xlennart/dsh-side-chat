@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="release/dsh-side-chat-1.2.1.tgz"><img alt="Version 1.2.1" src="https://img.shields.io/badge/version-1.2.1-2563eb?style=flat-square"></a>
+  <a href="release/dsh-side-chat-1.2.2.tgz"><img alt="Version 1.2.2" src="https://img.shields.io/badge/version-1.2.2-2563eb?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a>
-  <img alt="Tests 28 passing" src="https://img.shields.io/badge/tests-28%20passing-16a34a?style=flat-square">
+  <img alt="Tests 41 passing" src="https://img.shields.io/badge/tests-41%20passing-16a34a?style=flat-square">
   <img alt="DeepSeek Harness plugin" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-0ea5e9?style=flat-square">
 </p>
 
@@ -33,7 +33,7 @@
 
 ## Start Here
 
-- **Just use it:** download [`release/dsh-side-chat-1.2.1.tgz`](release/dsh-side-chat-1.2.1.tgz) and install it with the command below.
+- **Just use it:** download [`release/dsh-side-chat-1.2.2.tgz`](release/dsh-side-chat-1.2.2.tgz) and install it with the command below.
 - **Develop it:** clone the repository, run `npm test`, and let the same command build the plugin and run the regression suite.
 - **What it solves:** open a native DSH session that can ask questions, use tools, and work in the project without leaving the main conversation.
 - **The key boundary:** the main session and side chat share a workspace but keep independent transcripts; the side chat does not automatically copy the full parent conversation.
@@ -52,16 +52,18 @@ The main conversation and side chat use the same native DSH interface. The divid
 
 ### Install the prebuilt package
 
-Requirements: Node.js 22 or later and a DeepSeek Harness installation that can load Web plugins.
+Requirements: Node.js 24.9 or later and a DeepSeek Harness installation that can load Web plugins.
 
-Download the prebuilt package from [GitHub Releases](https://github.com/KarlOfLaw/dsh-side-chat/releases/latest), or use the copy in the repository's `release/` directory. Installation does not need to run the build again:
+This update targets DSH `0.2.2-rc.1` (prerelease). See the [compatibility record](docs/compatibility/dsh-0.2.2-rc.1.md) for the verification scope.
+
+Download the prebuilt package from [GitHub Releases](https://github.com/xlennart/dsh-side-chat/releases/latest), or use the copy in the repository's `release/` directory. Installation does not need to run the build again:
 
 ```powershell
 # After downloading from GitHub Releases:
-dsh plugin --profile web add .\dsh-side-chat-1.2.1.tgz
+dsh plugin --profile web add .\dsh-side-chat-1.2.2.tgz
 
 # Or use the in-repo copy:
-dsh plugin --profile web add .\release\dsh-side-chat-1.2.1.tgz
+dsh plugin --profile web add .\release\dsh-side-chat-1.2.2.tgz
 ```
 
 Start DSH from the project that you want the Agent to work in:
@@ -76,7 +78,7 @@ Open the URL printed by DSH. The plugin loads automatically in the Web client.
 ### Build from source
 
 ```powershell
-git clone https://github.com/KarlOfLaw/dsh-side-chat.git
+git clone https://github.com/xlennart/dsh-side-chat.git
 cd dsh-side-chat
 npm test
 
@@ -120,7 +122,7 @@ When the plugin is registered from its source directory, DSH loads `dist/formal-
 
 ## Sessions and Data
 
-The first open creates a real DSH Session with `parentSession` and archives it immediately, keeping it out of the workspace session list. If a side chat was retained, the next open in the same mode resumes the most recent retained session instead of starting empty.
+The first open creates a real DSH Session with `parentSession`. A public sidebar row slot hides Side Chat entries without blocking execution; opening a retained legacy side unarchives it. If a side chat was retained, the next open in the same mode resumes the most recent retained session instead of starting empty.
 
 The plugin does not copy the parent transcript into the side chat. Selected text stays in Side Chat's own reference state instead of the native draft and is projected only into the request that is sent. When more background is actually needed, `side_chat_context` can retrieve a bounded, relevant, chronologically ordered set of parent-session events.
 
@@ -135,7 +137,7 @@ The main session and side chat share the same workspace. File edits, commands, a
 | **Complete before first send** | Even an empty side chat shows native conversation content, the composer, and hide/close controls; the same native UI remains after sending. |
 | **On-demand parent context** | The plugin does not copy the parent transcript. `side_chat_context` retrieves bounded, relevant parent excerpts only when needed. |
 | **True side-by-side layout** | Adds only a minimal split shell. The main conversation remains visible even in narrow hosts; the divider supports dragging and keyboard adjustment, with the side pane constrained to 25%-70%. |
-| **No sidebar pollution** | New side sessions are archived immediately and stay out of the workspace session list. |
+| **No sidebar pollution** | A public sidebar row slot hides Side Chat entries while sessions remain executable. |
 | **Ask about a selection** | Selecting text reveals a "Quote in side chat" action. References can be previewed or removed without leaving an `@` marker or hidden text in the native composer. |
 | **Better Sidebar compatibility** | Optionally registers a Better Sidebar page while always retaining Side Chat's own shortcut; the complete standalone path remains available when Better Sidebar is absent. |
 | **Hide, restore, or delete** | Hiding only collapses the pane; retained chats can be restored, and closing can safely delete the child session. |
@@ -155,7 +157,7 @@ The host adds only the lifecycle and context capabilities required by side chat:
 
 ```text
 Main Session
-  `-- archived side Session (parentSession=Main Session)
+  `-- independent side Session (parentSession=Main Session)
       |-- native DSH Agent / preset / tools / approvals
       |-- independent transcript, shared workspace
       `-- side_chat_context -> bounded, on-demand parent context

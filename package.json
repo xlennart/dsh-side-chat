@@ -1,16 +1,16 @@
 {
   "name": "dsh-side-chat",
-  "version": "1.2.1",
-  "description": "DeepSeek Harness 原生并排侧聊：归档独立会话、按需主会话上下文、原生会话 UI 与可配置生命周期。",
+  "version": "1.2.2",
+  "description": "DeepSeek Harness 原生并排侧聊：独立会话、按需主会话上下文、原生会话 UI 与可配置生命周期。",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/KarlOfLaw/dsh-side-chat.git"
+    "url": "git+https://github.com/xlennart/dsh-side-chat.git"
   },
   "bugs": {
-    "url": "https://github.com/KarlOfLaw/dsh-side-chat/issues"
+    "url": "https://github.com/xlennart/dsh-side-chat/issues"
   },
-  "homepage": "https://github.com/KarlOfLaw/dsh-side-chat#readme",
+  "homepage": "https://github.com/xlennart/dsh-side-chat#readme",
   "type": "module",
   "main": "./dist/formal-host.mjs",
   "files": [
@@ -25,8 +25,8 @@
     "build": "node build.mjs",
     "build:formal": "node build-formal.mjs",
     "prepare": "node build.mjs",
-    "test": "node build.mjs && node tests/core.test.mjs && node tests/integration.test.mjs && node tests/client-contract.test.mjs && node tests/native-conversation.test.mjs && node tests/smoke.test.mjs",
-    "check": "node build.mjs && node tests/core.test.mjs && node tests/integration.test.mjs && node tests/client-contract.test.mjs && node tests/native-conversation.test.mjs && node tests/smoke.test.mjs"
+    "test": "node build.mjs && node tests/core.test.mjs && node tests/integration.test.mjs && node tests/client-contract.test.mjs && node tests/client-submission.test.mjs && node tests/native-conversation.test.mjs && node tests/smoke.test.mjs",
+    "check": "npm test"
   },
   "exports": {
     ".": "./dist/formal-host.mjs",
@@ -41,6 +41,7 @@
       "platform": "web",
       "inject": [
         "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-workspace",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-input-trigger",
         "@deepseek-ai/dsh-client-ui-settings-general",
@@ -49,7 +50,7 @@
     }
   },
   "engines": {
-    "node": ">=22",
+    "node": ">=24.9.0",
     "dsh": ">=0.1.7-rc.2 <0.3.0"
   },
   "devDependencies": {

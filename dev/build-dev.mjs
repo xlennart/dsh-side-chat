@@ -160,7 +160,7 @@ writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
     },
     client: {
       platform: 'web',
-      inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-client-ui-input-trigger', '@deepseek-ai/dsh-client-ui-settings-general'],
+      inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-slots', '@deepseek-ai/dsh-client-ui-workspace', '@deepseek-ai/dsh-client-ui-conversation', '@deepseek-ai/dsh-client-ui-input-trigger', '@deepseek-ai/dsh-client-ui-settings-general'],
       immediately: false,
     },
   },

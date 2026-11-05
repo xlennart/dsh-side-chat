@@ -131,7 +131,7 @@ test('side session uses framework BindingContext provider and arbitrary provideI
 
 test('parallel shell aligns, resizes, hides and restores the native side conversation', () => {
   assert.match(client, /data-conversation-scroll.*data-composer-seat/)
-  assert.match(client, /dsh-sc-column-side:not\(:has\(\[data-slot="conversation\.composer\.dock"\]>\*\)\)\{padding-bottom:24px\}/)
+  assert.match(client, /dsh-sc-column-side:not\(\[data-side-chat-renderer\]\):not\(:has\(\[data-slot="conversation\.composer\.dock"\]>\*\)\)\{padding-bottom:24px\}/)
   assert.match(client, /role: 'separator'/)
   assert.match(client, /aria-label': '调整主对话与侧聊宽度'/)
   assert.match(client, /sideRatio/)

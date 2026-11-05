@@ -9,9 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="release/dsh-side-chat-1.2.1.tgz"><img alt="Version 1.2.1" src="https://img.shields.io/badge/version-1.2.1-2563eb?style=flat-square"></a>
+  <a href="release/dsh-side-chat-1.2.2.tgz"><img alt="Version 1.2.2" src="https://img.shields.io/badge/version-1.2.2-2563eb?style=flat-square"></a>
   <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-111827?style=flat-square"></a>
-  <img alt="Tests 28 passing" src="https://img.shields.io/badge/tests-28%20passing-16a34a?style=flat-square">
+  <img alt="Tests 41 passing" src="https://img.shields.io/badge/tests-41%20passing-16a34a?style=flat-square">
   <img alt="DeepSeek Harness plugin" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-0ea5e9?style=flat-square">
 </p>
 
@@ -33,7 +33,7 @@
 
 ## 先看这里
 
-- **想直接使用：** 下载 [`release/dsh-side-chat-1.2.1.tgz`](release/dsh-side-chat-1.2.1.tgz)，按下方命令安装。
+- **想直接使用：** 下载 [`release/dsh-side-chat-1.2.2.tgz`](release/dsh-side-chat-1.2.2.tgz)，按下方命令安装。
 - **想参与开发：** 克隆仓库后运行 `npm test`，它会构建插件并执行全部回归测试。
 - **它解决什么：** 在不离开主会话的情况下，打开一个可以独立提问、调用工具和修改工作区的原生 DSH 会话。
 - **最重要的边界：** 主会话与侧聊共享工作区，但 transcript 相互独立；侧聊不会自动复制整段主对话。
@@ -52,16 +52,18 @@
 
 ### 直接安装正式包
 
-要求：Node.js 22 或更高版本，以及能够加载 Web 插件的 DeepSeek Harness。
+要求：Node.js 24.9 或更高版本，以及能够加载 Web 插件的 DeepSeek Harness。
 
-下载已经构建好的插件：优先从 [GitHub Releases](https://github.com/KarlOfLaw/dsh-side-chat/releases/latest) 获取最新包，也可以直接使用仓库内 `release/` 目录；安装时不需要再次运行构建脚本：
+本次适配目标为 DSH `0.2.2-rc.1`（预发布版）；验证范围见[兼容性记录](docs/compatibility/dsh-0.2.2-rc.1.md)。
+
+下载已经构建好的插件：优先从 [GitHub Releases](https://github.com/xlennart/dsh-side-chat/releases/latest) 获取最新包，也可以直接使用仓库内 `release/` 目录；安装时不需要再次运行构建脚本：
 
 ```powershell
 # 从 GitHub Release 下载后：
-dsh plugin --profile web add .\dsh-side-chat-1.2.1.tgz
+dsh plugin --profile web add .\dsh-side-chat-1.2.2.tgz
 
 # 或使用仓库内副本：
-dsh plugin --profile web add .\release\dsh-side-chat-1.2.1.tgz
+dsh plugin --profile web add .\release\dsh-side-chat-1.2.2.tgz
 ```
 
 从希望 Agent 操作的工程目录启动 DSH：
@@ -76,7 +78,7 @@ dsh web --port 3080
 ### 从源码构建
 
 ```powershell
-git clone https://github.com/KarlOfLaw/dsh-side-chat.git
+git clone https://github.com/xlennart/dsh-side-chat.git
 cd dsh-side-chat
 npm test
 
@@ -120,7 +122,7 @@ pnpm --dir $DshSource dsh plugin --profile web update dsh-side-chat
 
 ## 会话与数据
 
-第一次打开时，插件创建一个带 `parentSession` 的真实 DSH Session，并立即将它归档，因此它不会出现在 workspace 左侧会话列表。保留过的同模式侧聊会在下次打开时恢复，而不是重新创建空会话。
+第一次打开时，插件创建一个带 `parentSession` 的真实 DSH Session。插件通过公开的侧栏行插槽隐藏侧聊条目，保持会话可执行；恢复旧侧聊时会取消归档。保留过的同模式侧聊会在下次打开时恢复，而不是重新创建空会话。
 
 插件不会把主 transcript 复制到侧聊。选中的文字保存在侧聊自己的引用状态中，不写入原生输入框草稿；只有用户发送消息时才会投影进该次侧聊请求。当侧聊确实需要更多背景时，可以通过 `side_chat_context` 按需读取有界、相关且按时间排序的父会话片段。
 
@@ -135,7 +137,7 @@ pnpm --dir $DshSource dsh plugin --profile web update dsh-side-chat
 | **发送前即完整可用** | 空白侧聊也显示原生会话正文、输入框以及隐藏/关闭控制，发送消息前后使用同一套原生界面。 |
 | **按需理解主对话** | 不复制主 transcript；需要背景时，通过 `side_chat_context` 检索有界、相关的父会话片段。 |
 | **真正并排** | 只增加最小 split shell；主对话在窄窗口也不会被隐藏，分隔条支持拖拽和方向键微调，侧聊占比限制在 25%–70%。 |
-| **不污染会话列表** | 新侧聊立即归档，不出现在 workspace 左侧列表中。 |
+| **不污染会话列表** | 通过公开的侧栏行插槽隐藏侧聊条目，不阻断会话执行。 |
 | **选文即问** | 选中主消息文字后出现“引用到侧聊”；引用可预览、可删除，且不会在原生输入框中残留 `@` 或隐藏文本。 |
 | **兼容 Better Sidebar** | 可选注册为 Better Sidebar 页面，同时始终保留 Side Chat 自己的快捷入口；没有安装 Better Sidebar 时保持完整独立功能。 |
 | **可隐藏、可恢复、可删除** | 隐藏只收起面板；保留后可以恢复，关闭时也可选择安全删除。 |
@@ -155,7 +157,7 @@ host 只增加侧聊需要的生命周期与上下文能力：
 
 ```text
 主 Session
-  └─ archived side Session (parentSession=主 Session)
+  └─ independent side Session (parentSession=主 Session)
        ├─ 原生 DSH Agent / preset / tools / approvals
        ├─ 独立 transcript，共享 workspace
        └─ side_chat_context → 按需读取父会话的相关上下文

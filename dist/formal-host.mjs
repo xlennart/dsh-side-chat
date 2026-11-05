@@ -1,4 +1,4 @@
-// dsh-side-chat host: an archived root Session plus a scoped parent-context tool.
+// dsh-side-chat host: an independent root Session plus a scoped parent-context tool.
 // Core helpers are inlined at build time because the dynamic Cordis host cannot import.
 
 import { lstat, rmdir, unlink } from 'node:fs/promises'
@@ -209,11 +209,18 @@ function normalizeContextRequest(input) {
       return value
     }
 
+    async function storedSnapshot(sessionId) {
+      if (persistence === undefined) return undefined
+      if (typeof persistence.stat === 'function') return persistence.stat(sessionId)
+      const stored = (await persistence.list()).find(item => (item.header ?? item).id === sessionId)
+      return stored?.header === undefined && stored !== undefined ? { header: stored } : stored
+    }
+
     async function parentAgent(parentSessionId) {
       const live = requireService(agents, 'agents').get(parentSessionId)
       if (live !== undefined) return live
       if (persistence !== undefined && typeof persistence.list === 'function') {
-        const header = (await persistence.list()).find(item => item.id === parentSessionId)
+        const header = (await storedSnapshot(parentSessionId))?.header
         if (header !== undefined) {
           // A historical main conversation does not need to be resumed just to
           // establish a side Session. Its durable header carries the cwd,
@@ -225,7 +232,11 @@ function normalizeContextRequest(input) {
     }
 
     function safeAgentOptions(parent) {
-      const options = parent.options ?? {}
+      const options = {
+        ...ctx.get('agentDefaultModel')?.currentSelection?.(),
+        ...parent.options,
+        ...parent.model?.current?.(),
+      }
       const next = {}
       for (const key of ['provider', 'model', 'maxTokens', 'temperature', 'reasoningEffort']) {
         if (options[key] !== undefined) next[key] = options[key]
@@ -300,7 +311,7 @@ function normalizeContextRequest(input) {
 
     async function retainedHeader(parentSessionId, preset) {
       if (persistence === undefined || typeof persistence.list !== 'function') return undefined
-      const headers = await persistence.list()
+      const headers = (await persistence.list()).map(item => item.header ?? item)
       return latestRetainedSession(headers, parentSessionId, preset)
     }
 
@@ -326,6 +337,7 @@ function normalizeContextRequest(input) {
         }
         const handle = await agents.resume({
           resumeSessionId: retained.id,
+          agentOptions: safeAgentOptions(parent),
           setup: childCtx => composeChild(childCtx, parent, preset),
         })
         return { handle: remember(parentSessionId, handle), resumed: true }
@@ -349,7 +361,14 @@ function normalizeContextRequest(input) {
       const request = normalizeOpenRequest(input)
       const result = await createOrResume(request.parentSessionId, request.preset)
       const child = result.handle.agent
-      await requireService(workspaceRegistry, 'workspaceRegistry').archiveSession(child.id)
+      // Archival now gates Agent execution. Unarchive retained legacy sides too;
+      // the Client hides Side Chat rows through the public sidebar row seat.
+      await requireService(workspaceRegistry, 'workspaceRegistry').unarchiveSession(child.id)
+      const cwd = child.session?.header?.cwd
+      if (cwd !== undefined && typeof workspaceRegistry.resolveByPath === 'function') {
+        const workspace = await workspaceRegistry.resolveByPath(cwd)
+        if (workspace !== undefined) await workspace.attachSession(child.id)
+      }
       return {
         sessionId: child.id,
         parentSessionId: request.parentSessionId,
@@ -363,6 +382,8 @@ function normalizeContextRequest(input) {
       if (handle === undefined) return
       if (sessions !== undefined && typeof sessions.flush === 'function') {
         await sessions.flush(handle.agent.session)
+      } else if (typeof persistence?.flush === 'function') {
+        await persistence.flush()
       }
       await handle.dispose()
       handles.delete(sessionId)
@@ -384,12 +405,12 @@ function normalizeContextRequest(input) {
 
       const handle = handles.get(sessionId)
       const live = handle?.agent ?? agents.get(sessionId)
-      const header = live?.session?.header
-        ?? (persistence === undefined ? undefined : (await persistence.list()).find(item => item.id === sessionId))
+      const stored = await storedSnapshot(sessionId)
+      const header = live?.session?.header ?? stored?.header
       if (header === undefined || !String(header.id).startsWith(SIDE_ID_PREFIX)) {
         throw new SideChatError('not-side-chat', '拒绝删除非侧聊会话')
       }
-      const location = persistence?.locate?.(header)
+      const location = stored?.location ?? persistence?.locate?.(header)
       if (location === undefined || location.kind !== 'jsonl') {
         await release(sessionId)
         return {
