@@ -9,7 +9,9 @@ const CSS = `
 .dsh-sc-root-split .dsh-sc-column-main{display:flex;flex:1 1 0;width:auto;max-width:none}
 .dsh-sc-root-split .dsh-sc-resizer{display:block}
 .dsh-sc-root-split .dsh-sc-column-side{flex:0 0 var(--dsh-sc-side-width,50%);width:auto;max-width:none}
-.dsh-sc-column-side:not(:has([data-slot="conversation.composer.dock"]>*)){padding-bottom:24px}
+.dsh-sc-column-side:not([data-side-chat-renderer]):not(:has([data-slot="conversation.composer.dock"]>*)){padding-bottom:24px}
+[role="treeitem"]:has([data-side-chat-row]),[role="treeitem"][data-row-key^="session:sidechat-"]{display:none}
+.dsh-sc-column-side:has(header [data-side-chat-utilities])>.dsh-sc-factory-controls{display:none}
 .dsh-sc-column>[data-phase],.dsh-sc-column>[data-conversation-content]{flex:1;min-height:0}
 .dsh-sc-column-side [data-conversation-scroll]>[data-composer-seat]{margin-top:auto}
 .dsh-sc-resizer{position:relative;z-index:1;flex:0 0 7px;margin:0 -3px;cursor:col-resize;touch-action:none;outline:none}
@@ -158,7 +160,7 @@ function serializeSideSelections(selections) {
 function installSidePromptProjection(conversationService) {
   const original = conversationService?.sendSession
   if (typeof original !== 'function') throw new Error('dsh-side-chat: conversation.sendSession is unavailable')
-  const wrapped = async function (session, text, imageIds, mode, signal) {
+  const wrapped = async function (session, text, attachmentIds, mode, signal, accept) {
     let owner
     for (const [parentId, side] of uiState.sides) {
       if (sessionsService?.binding?.(side.sideId)?.session === session) {
@@ -167,11 +169,13 @@ function installSidePromptProjection(conversationService) {
       }
     }
     const selections = Array.isArray(owner?.side.selections) ? [...owner.side.selections] : []
-    if (owner === undefined || selections.length === 0) return original.call(this, session, text, imageIds, mode, signal)
+    if (owner === undefined || selections.length === 0) return original.call(this, session, text, attachmentIds, mode, signal, accept)
     const context = serializeSideSelections(selections)
     const projectedText = String(text).trim() === '' ? context : `${context}\n\n${text}`
-    const outcome = await original.call(this, session, projectedText, imageIds, mode, signal)
-    if (outcome?.kind === 'success') {
+    let accepted = false
+    const clearAcceptedSelections = () => {
+      if (accepted) return
+      accepted = true
       const current = uiState.sides.get(owner.parentId)
       if (current?.sideId === owner.side.sideId) {
         const remaining = (current.selections ?? []).filter(selection => !selections.includes(selection))
@@ -179,6 +183,14 @@ function installSidePromptProjection(conversationService) {
         persistSelections(owner.side.sideId, remaining)
       }
     }
+    // DSH 0.2.2 settles the composer inside Host acceptance, before the echo.
+    // Forward that boundary and retire only the quotes captured by this send.
+    const outcome = await original.call(this, session, projectedText, attachmentIds, mode, signal, () => {
+      clearAcceptedSelections()
+      accept?.()
+    })
+    // Older Hosts report acceptance only through the final outcome.
+    if (outcome?.kind === 'success') clearAcceptedSelections()
     return outcome
   }
   conversationService.sendSession = wrapped
@@ -821,20 +833,29 @@ function FixedChatConversationView({ renderSlot }) {
   return h(React.Fragment, null, renderSlot('conversation.session', { view: 'chat' }))
 }
 
-function FactorySideConversation({ renderFactorySlot }) {
-  return renderFactorySlot('conversation.content', {
+function SideSessionRowMarker({ sessionId }) {
+  return typeof sessionId === 'string' && sessionId.startsWith('sidechat-')
+    ? h('span', { 'data-side-chat-row': '', hidden: true })
+    : null
+}
+
+function FactorySideConversation({ renderFactorySlot, renderSlot }) {
+  return h(React.Fragment, null,
+    typeof renderSlot === 'function' ? renderSlot('conversation.header', {}) : null,
+    renderFactorySlot('conversation.content', {
     variant: 'embedded',
     phase: 'active',
     hero: false,
-  }, { slots: { views: FixedChatConversationView } })
+    }, typeof renderSlot === 'function' ? {} : { slots: { views: FixedChatConversationView } }),
+  )
 }
 
-function FactorySidePane({ reference, renderFactorySlot, SessionProvider, sideId }) {
+function FactorySidePane({ reference, renderFactorySlot, renderSlot, SessionProvider, sideId }) {
   return h('section', { className: 'dsh-sc-column dsh-sc-column-side', 'data-side-chat-side': '', 'data-side-chat-renderer': 'factory' },
     reference === undefined
       ? h('div', { className: 'dsh-sc-error' }, '正在连接原生侧聊会话…')
       : h(SessionProvider, { session: reference, key: sideId },
-        h(FactorySideConversation, { renderFactorySlot }),
+        h(FactorySideConversation, { renderFactorySlot, renderSlot }),
       ),
     h('div', { className: 'dsh-sc-factory-controls' }, h(SideUtilities, { sessionId: sideId })),
   )
@@ -946,6 +967,39 @@ function ParallelConversation(props) {
   })
 
   React.useEffect(() => () => { conversationKits.delete(props.sessionId) }, [props.sessionId])
+
+  React.useLayoutEffect(() => {
+    const root = splitRef.current
+    if (!sideVisible || root === null) return undefined
+    const headers = [root.querySelector('.dsh-sc-column-main header'), root.querySelector('.dsh-sc-column-side header')]
+    if (headers.some(header => header === null)) return undefined
+    const originals = headers.map(header => header.style.minHeight)
+    let frame
+    let applied
+    const measure = () => {
+      headers.forEach((header, index) => { header.style.minHeight = originals[index] })
+      const height = Math.max(...headers.map(header => header.getBoundingClientRect().height))
+      applied = `${height}px`
+      headers.forEach(header => { header.style.minHeight = applied })
+      root.setAttribute('data-side-chat-align-headers', '')
+    }
+    const schedule = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(measure)
+    }
+    const observer = new ResizeObserver(schedule)
+    headers.forEach(header => observer.observe(header))
+    observer.observe(root)
+    measure()
+    return () => {
+      cancelAnimationFrame(frame)
+      observer.disconnect()
+      root.removeAttribute('data-side-chat-align-headers')
+      headers.forEach((header, index) => {
+        if (header.style.minHeight === applied) header.style.minHeight = originals[index]
+      })
+    }
+  }, [sideVisible, sideBinding?.kind, sideId])
 
   React.useEffect(() => {
     if (integrated && ownsSide) openBetterSidebarTab(props.sessionId)
@@ -1102,6 +1156,7 @@ function ParallelConversation(props) {
       ? h(FactorySidePane, {
         reference: current?.kind === 'factory' ? current.reference : undefined,
         renderFactorySlot: props.renderFactorySlot,
+        renderSlot: props.renderSlot,
         SessionProvider,
         sideId,
       })
@@ -1286,6 +1341,11 @@ return {
         }
       }, 'dsh-side-chat: better-sidebar tab')
     })
+
+    slots.inject('sidebar.session.row.trailing', () => slots.register({
+      name: 'sidebar.session.row.trailing',
+      id: 'side-chat-hidden-session',
+    }, SideSessionRowMarker))
 
     slots.inject('conversation.session.header.actions', () => slots.register({
       name: 'conversation.session.header.actions',

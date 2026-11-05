@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.2 (2026-11-05)
+
+- Forward DSH 0.2.2 Host acceptance callbacks through the Side Chat prompt projection so the native composer settles before the message echo.
+- Retire only accepted quotes, preserve quotes added during a send, and keep rejected or cancelled drafts and references intact.
+- Keep side Sessions executable by unarchiving them on open; hide their sidebar rows through a public slot instead of archival.
+- Reuse the native Session header in the side pane and remove the obsolete 24px bottom offset, aligning both composers and headers.
+- Read the new persistence snapshots through header and location; restore retained and cold-parent Sessions and support artifact deletion after removal of locate().
+- Supply a model route fallback when resuming a blank retained side; recorded selections and requests keep native precedence.
+- Add thirteen behavioral regressions for submission, persistence, retention, model fallback, deletion, sidebar identity and unload ownership.
+- Align the documented Node minimum and CI with the target DSH requirement (Node 24.9+).
+- Record the exact DSH 0.2.2-rc.1 compatibility checks and remaining verification limits in docs/compatibility/dsh-0.2.2-rc.1.md.
+
 ## 1.2.1 (2026-09-30)
 
 - Restore compatibility with official DeepSeek Harness `0.2.0-rc.1` after the legacy client runtime and `conversation` slot were removed.
